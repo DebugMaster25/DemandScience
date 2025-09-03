@@ -8,7 +8,6 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,7 +27,6 @@ public class FileService {
         String id = UUID.randomUUID().toString();
         fileStatusMap.put(id, FileStatus.IN_PROGRESS);
 
-        // Process file
         List<String> lines = new BufferedReader(new InputStreamReader(file.getInputStream()))
                 .lines().collect(Collectors.toList());
         if (lines.isEmpty()) throw new IllegalArgumentException("Empty file");
