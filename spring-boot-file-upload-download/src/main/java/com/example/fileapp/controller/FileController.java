@@ -1,48 +1,45 @@
 package com.example.fileapp.controller;
 
 import com.example.fileapp.service.FileService;
-import com.example.fileapp.util.EmailValidator;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
+import java.util.Map;
 
 @RestController
-@RequestMapping("/api/files")
+@RequestMapping("/API")
 public class FileController {
 
     @Autowired
     private FileService fileService;
 
-    @Autowired
-    private EmailValidator emailValidator;
-
     @PostMapping("/upload")
-    public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file,
-                                             @RequestParam("email") String email) {
-        if (!emailValidator.isValidEmail(email)) {
-            return ResponseEntity.badRequest().body("Invalid email format");
-        }
+    public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) {
         try {
-            fileService.saveFile(file);
-            return ResponseEntity.ok("File uploaded successfully");
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("File upload failed");
+            String id = fileService.processAndStoreFile(file);
+            return ResponseEntity.ok(Map.of("id", id));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Upload failed"));
         }
     }
 
-    @GetMapping("/download/{filename}")
-    public ResponseEntity<byte[]> downloadFile(@PathVariable String filename) {
-        byte[] fileData = fileService.retrieveFile(filename);
-        if (fileData == null) {
-            return ResponseEntity.notFound().build();
+    @GetMapping("/download/{id}")
+    public ResponseEntity<?> downloadFile(@PathVariable String id) {
+        FileService.FileStatus status = fileService.getFileStatus(id);
+        if (status == FileService.FileStatus.NOT_FOUND) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid ID"));
         }
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Content-Disposition", "attachment; filename=" + filename);
-        return new ResponseEntity<>(fileData, headers, HttpStatus.OK);
+        if (status == FileService.FileStatus.IN_PROGRESS) {
+            return ResponseEntity.status(423).body(Map.of("error", "Job in progress"));
+        }
+        byte[] fileData = fileService.getFileData(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + id + ".csv\"")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(fileData);
     }
 }
